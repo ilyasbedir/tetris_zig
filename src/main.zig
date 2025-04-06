@@ -39,17 +39,15 @@ const Game = struct {
 
     pub fn drawBoardGrid(self: *Self) void {
         _ = self;
-        // Draw a grid with 10 columns and 20 rows
-        const cellSize: f32 = 40.0; // Size of each cell in pixels
         //
         for (0..boardColumn + 1) |i| {
             rl.drawLineEx(
                 rl.Vector2{
-                    .x = boardStartCoordinateX + (@as(f32, @floatFromInt(i)) * cellSize),
+                    .x = boardStartCoordinateX + (@as(f32, @floatFromInt(i)) * tileWidth),
                     .y = boardStartCoordinateY,
                 },
                 rl.Vector2{
-                    .x = boardStartCoordinateX + (@as(f32, @floatFromInt(i)) * cellSize),
+                    .x = boardStartCoordinateX + (@as(f32, @floatFromInt(i)) * tileWidth),
                     .y = boardStartCoordinateY + boardHeight,
                 },
                 1.0,
@@ -60,11 +58,11 @@ const Game = struct {
             rl.drawLineEx(
                 rl.Vector2{
                     .x = boardStartCoordinateX,
-                    .y = boardStartCoordinateY + (@as(f32, @floatFromInt(j)) * cellSize),
+                    .y = boardStartCoordinateY + (@as(f32, @floatFromInt(j)) * tileHeight),
                 },
                 rl.Vector2{
                     .x = boardStartCoordinateX + boardWidth,
-                    .y = boardStartCoordinateY + (@as(f32, @floatFromInt(j)) * cellSize),
+                    .y = boardStartCoordinateY + (@as(f32, @floatFromInt(j)) * tileHeight),
                 },
                 1.0,
                 rl.Color.black,
