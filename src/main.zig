@@ -21,9 +21,7 @@ const Game = struct {
         }
     }
 
-    board: [boardRows][boardColumn]u8 = undefined,
     colorBoard: [boardRows][boardColumn]rl.Color = undefined,
-    tileColor: rl.Color = undefined,
     currentPieceType: ?tetro.Tetrominoes.ShapeType = null,
     nextPieceType: ?tetro.Tetrominoes.ShapeType = null,
     score: u32 = 0,
@@ -32,6 +30,9 @@ const Game = struct {
     gamePaused: bool = false,
     fallSpeed: f32 = 1.0,
     rotation: u8 = 0, // TODO: refactor this to use enum instead plain value
+
+    // Empty color (black with alpha 0) indicates no piece
+    const EMPTY_COLOR = rl.Color{ .r = 0, .g = 0, .b = 0, .a = 0 };
 
     pub fn drawBoardGrid(self: *Self) void {
         _ = self;
@@ -108,8 +109,7 @@ const Game = struct {
                         const bColumns = @as(usize, @intFromFloat(boardColumn));
 
                         if ((tileRow < bRows) and (tileColumn < bColumns)) {
-                            self.board[tileRow][tileColumn] = tile[row][column];
-                            // Store the color for this piece in the colorBoard
+                            // Just set the color - the presence of color indicates a piece
                             self.colorBoard[tileRow][tileColumn] = pieceColor;
                         }
                     }
@@ -122,19 +122,15 @@ const Game = struct {
         self.currentPieceType = self.nextPieceType;
         self.nextPieceType = self.getRandomTetrominoeType();
         self.rotation = self.getRandomRotation();
-        self.tileColor = tetro.Tetrominoes.TetrominoeColor.toColor(self.getRandomTetrominoeColor());
-        //
         self.addTetrominoeOnBoard();
-        //
         self.drawTetrominoe();
     }
 
     pub fn drawTetrominoe(self: *Self) void {
         for (0..boardRows) |row| {
             for (0..boardColumn) |column| {
-                const pieceValue = self.board[row][column];
-                if (pieceValue > 0) {
-                    // Use the color stored in the colorBoard
+                const pieceValue = self.colorBoard[row][column];
+                if (pieceValue.a > 0) {
                     rl.drawRectangleRec(
                         .{
                             .x = boardStartCoordinateX + (tileWidth * @as(f32, @floatFromInt(column))),
@@ -142,7 +138,7 @@ const Game = struct {
                             .width = tileWidth,
                             .height = tileHeight,
                         },
-                        self.colorBoard[row][column],
+                        pieceValue,
                     );
                 }
             }
@@ -173,9 +169,7 @@ pub fn main() anyerror!void {
 
     //
     var tetrisGame: Game = .{
-        .board = [_][Game.boardColumn]u8{[_]u8{0} ** Game.boardColumn} ** Game.boardRows,
-        .colorBoard = [_][Game.boardColumn]rl.Color{[_]rl.Color{rl.Color.black} ** Game.boardColumn} ** Game.boardRows,
-        .tileColor = rl.Color.black,
+        .colorBoard = [_][Game.boardColumn]rl.Color{[_]rl.Color{Game.EMPTY_COLOR} ** Game.boardColumn} ** Game.boardRows,
         .currentPieceType = null,
         .nextPieceType = null,
         .score = 0,
