@@ -22,20 +22,16 @@ const Game = struct {
     }
 
     board: [boardRows][boardColumn]u8 = undefined,
-    tileColor: [boardRows][boardColumn]rl.Color = undefined,
-    currentPieceType: tetro.Tetrominoes.ShapeType = tetro.Tetrominoes.ShapeType.NONE,
-    nextPieceType: tetro.Tetrominoes.ShapeType = tetro.Tetrominoes.ShapeType.NONE,
+    colorBoard: [boardRows][boardColumn]rl.Color = undefined,
+    tileColor: rl.Color = undefined,
+    currentPieceType: ?tetro.Tetrominoes.ShapeType = null,
+    nextPieceType: ?tetro.Tetrominoes.ShapeType = null,
     score: u32 = 0,
     level: u8 = 0,
     gameOver: bool = false,
     gamePaused: bool = false,
     fallSpeed: f32 = 1.0,
-
-    pub fn initBoard(self: *Self) void {
-        // Initialize entire board to zeros
-        @memset(std.mem.asBytes(&self.board), 0);
-        @memset(std.mem.asBytes(&self.tileColor), 0);
-    }
+    rotation: u8 = 0, // TODO: refactor this to use enum instead plain value
 
     pub fn drawBoardGrid(self: *Self) void {
         _ = self;
@@ -70,18 +66,83 @@ const Game = struct {
         }
     }
 
+    pub fn getRandomTetrominoeType(self: *Self) tetro.Tetrominoes.ShapeType {
+        _ = self;
+        var prng = std.Random.DefaultPrng.init(@intCast(std.time.milliTimestamp()));
+        var random = prng.random();
+        return random.enumValue(tetro.Tetrominoes.ShapeType);
+    }
+
+    pub fn getRandomTetrominoeColor(self: *Self) tetro.Tetrominoes.TetrominoeColor {
+        _ = self;
+        var prng = std.Random.DefaultPrng.init(@intCast(std.time.microTimestamp()));
+        return std.Random.enumValue(prng.random(), tetro.Tetrominoes.TetrominoeColor);
+    }
+
+    pub fn getRandomRotation(self: *Self) u8 {
+        _ = self;
+        var prng = std.Random.DefaultPrng.init(@intCast(std.time.milliTimestamp()));
+        var random = prng.random();
+        return random.uintLessThan(u8, 4); // Random number between 0 and 3 inclusive
+    }
+
+    pub fn addTetrominoeOnBoard(self: *Self) void {
+        //
+        if (self.currentPieceType) |pieceType| {
+            const tile = tetro.Tetrominoes.getShape(pieceType, self.rotation);
+
+            // Define position
+            const startX: i32 = 0; // Center of board
+            const startY: i32 = 0; // Top of board
+
+            // Generate a random color for this specific piece
+            const pieceColor = tetro.Tetrominoes.TetrominoeColor.toColor(self.getRandomTetrominoeColor());
+
+            //
+            for (0..4) |row| {
+                for (0..4) |column| {
+                    if (0 < tile[row][column]) {
+                        const tileRow = @as(usize, @intCast(startY + @as(i32, @intCast(row))));
+                        const tileColumn = @as(usize, @intCast(startX + @as(i32, @intCast(column))));
+                        const bRows = @as(usize, @intFromFloat(boardRows));
+                        const bColumns = @as(usize, @intFromFloat(boardColumn));
+
+                        if ((tileRow < bRows) and (tileColumn < bColumns)) {
+                            self.board[tileRow][tileColumn] = tile[row][column];
+                            // Store the color for this piece in the colorBoard
+                            self.colorBoard[tileRow][tileColumn] = pieceColor;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn spawnTetrominoe(self: *Self) void {
+        self.currentPieceType = self.nextPieceType;
+        self.nextPieceType = self.getRandomTetrominoeType();
+        self.rotation = self.getRandomRotation();
+        self.tileColor = tetro.Tetrominoes.TetrominoeColor.toColor(self.getRandomTetrominoeColor());
+        //
+        self.addTetrominoeOnBoard();
+        //
+        self.drawTetrominoe();
+    }
+
     pub fn drawTetrominoe(self: *Self) void {
         for (0..boardRows) |row| {
             for (0..boardColumn) |column| {
-                if (0 < self.board[row][column]) {
+                const pieceValue = self.board[row][column];
+                if (pieceValue > 0) {
+                    // Use the color stored in the colorBoard
                     rl.drawRectangleRec(
                         .{
-                            .x = boardStartCoordinateX + (tileWidth * @as(f32, @floatFromInt(row))),
-                            .y = boardStartCoordinateY + (tileWidth * @as(f32, @floatFromInt(column))),
+                            .x = boardStartCoordinateX + (tileWidth * @as(f32, @floatFromInt(column))),
+                            .y = boardStartCoordinateY + (tileHeight * @as(f32, @floatFromInt(row))),
                             .width = tileWidth,
                             .height = tileHeight,
                         },
-                        self.tileColor[row][column],
+                        self.colorBoard[row][column],
                     );
                 }
             }
@@ -111,7 +172,18 @@ pub fn main() anyerror!void {
     //--------------------------------------------------------------------------------------
 
     //
-    var tetrisGame: Game = undefined;
+    var tetrisGame: Game = .{
+        .board = [_][Game.boardColumn]u8{[_]u8{0} ** Game.boardColumn} ** Game.boardRows,
+        .colorBoard = [_][Game.boardColumn]rl.Color{[_]rl.Color{rl.Color.black} ** Game.boardColumn} ** Game.boardRows,
+        .tileColor = rl.Color.black,
+        .currentPieceType = null,
+        .nextPieceType = null,
+        .score = 0,
+        .level = 0,
+        .gameOver = false,
+        .gamePaused = false,
+        .fallSpeed = 1.0,
+    };
     //
     const screenWidth: i32 = 600;
     const screenHeight: i32 = 900;
@@ -122,8 +194,8 @@ pub fn main() anyerror!void {
     rl.setTargetFPS(60); // Set our game to run at 60 frames-per-second
     //--------------------------------------------------------------------------------------
 
-    // Initialize board
-    tetrisGame.initBoard();
+    // Initialize the next piece
+    tetrisGame.nextPieceType = tetrisGame.getRandomTetrominoeType();
 
     // Main game loop
     while (!rl.windowShouldClose()) {
@@ -135,25 +207,12 @@ pub fn main() anyerror!void {
 
         rl.clearBackground(rl.Color.white);
 
+        // spawn tetrominoe
+        tetrisGame.spawnTetrominoe();
         // draw grid for the debug
         tetrisGame.drawBoardGrid();
         //
-        tetrisGame.board[1][1] = 1;
-        tetrisGame.tileColor[1][1] = rl.Color.green;
-        tetrisGame.board[2][2] = 1;
-        tetrisGame.tileColor[2][2] = rl.Color.red;
-        tetrisGame.board[3][3] = 1;
-        tetrisGame.tileColor[3][3] = rl.Color.purple;
-        tetrisGame.board[4][4] = 1;
-        tetrisGame.tileColor[4][4] = rl.Color.yellow;
-        tetrisGame.board[5][5] = 1;
-        tetrisGame.tileColor[5][5] = rl.Color.blue;
-        tetrisGame.board[6][6] = 1;
-        tetrisGame.tileColor[6][6] = rl.Color.magenta;
-        // draw tetrominoes
-        tetrisGame.drawTetrominoe();
-
-        //rl.drawText("Congrats!", 190, 200, 20, rl.Color.gray);
+        std.time.sleep(1 * std.time.ns_per_s);
         //----------------------------------------------------------------------------------
     }
 }
