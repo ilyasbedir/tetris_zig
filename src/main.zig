@@ -1,6 +1,5 @@
 const std = @import("std");
 const rl = @import("raylib");
-//const rg = @import("raygui");
 const tetro = @import("tetrominoes.zig");
 
 const Game = struct {
@@ -33,6 +32,28 @@ const Game = struct {
     rotation: u8 = 0, // TODO: refactor this to use enum instead plain value
     currentPieceY: i32 = 0,
     currentPieceX: i32 = 0,
+    rng: std.Random.DefaultPrng = undefined,
+    dropAccumulator: f32 = 0.0,
+
+    pub fn init(seed: u64) Self {
+        const prng = std.Random.DefaultPrng.init(seed);
+        return .{
+            .colorBoard = [_][boardColumn]rl.Color{[_]rl.Color{rl.Color.blank} ** boardColumn} ** boardRows,
+            .currentPieceType = null,
+            .nextPieceType = null,
+            .currentPieceColor = rl.Color.blank,
+            .score = 0,
+            .level = 0,
+            .gameOver = false,
+            .gamePaused = false,
+            .fallSpeed = 1.0,
+            .rotation = 0,
+            .currentPieceY = 0,
+            .currentPieceX = 0,
+            .rng = prng,
+            .dropAccumulator = 0.0,
+        };
+    }
 
     fn drawBoardGrid(self: *Self) void {
         _ = self;
@@ -68,23 +89,15 @@ const Game = struct {
     }
 
     fn getRandomTetrominoeType(self: *Self) tetro.Tetrominoes.ShapeType {
-        _ = self;
-        var prng = std.Random.DefaultPrng.init(@intCast(std.time.milliTimestamp()));
-        var random = prng.random();
-        return random.enumValue(tetro.Tetrominoes.ShapeType);
+        return self.rng.random().enumValue(tetro.Tetrominoes.ShapeType);
     }
 
     fn getRandomTetrominoeColor(self: *Self) tetro.Tetrominoes.TetrominoeColor {
-        _ = self;
-        var prng = std.Random.DefaultPrng.init(@intCast(std.time.microTimestamp()));
-        return std.Random.enumValue(prng.random(), tetro.Tetrominoes.TetrominoeColor);
+        return std.Random.enumValue(self.rng.random(), tetro.Tetrominoes.TetrominoeColor);
     }
 
     fn getRandomRotation(self: *Self) u8 {
-        _ = self;
-        var prng = std.Random.DefaultPrng.init(@intCast(std.time.milliTimestamp()));
-        var random = prng.random();
-        return random.uintLessThan(u8, 4); // Random number between 0 and 3 inclusive
+        return self.rng.random().uintLessThan(u8, 4); // Random number between 0 and 3 inclusive
     }
 
     fn addTetrominoeOnBoard(self: *Self) void {
@@ -183,6 +196,7 @@ const Game = struct {
         }
 
         self.addTetrominoeOnBoard();
+        self.dropAccumulator = 0.0;
     }
 
     fn lockCurrentPiece(self: *Self) void {
@@ -191,6 +205,7 @@ const Game = struct {
         self.rotation = 0;
         self.currentPieceX = 0;
         self.currentPieceY = 0;
+        self.dropAccumulator = 0.0;
     }
 
     fn clearCurrentPiece(self: *Self) void {
@@ -233,43 +248,32 @@ const Game = struct {
             return false;
         }
     }
+
+    pub fn update(self: *Self, dt: f32) void {
+        if (self.gameOver or self.gamePaused) return;
+
+        self.spawnTetrominoe();
+
+        if (self.currentPieceType == null) return;
+
+        const speed = if (self.fallSpeed <= 0) 0.05 else self.fallSpeed;
+        self.dropAccumulator += dt;
+
+        while (self.dropAccumulator >= speed) {
+            self.dropAccumulator -= speed;
+            if (!self.movePieceDown()) break;
+        }
+    }
 };
-
-fn dynamicWindow() void {
-    const screenWidth = 800;
-    const screenHeight = 450;
-    rl.initWindow(screenWidth, screenHeight, "Tetris ZIG develop");
-    const monitor: i32 = rl.getCurrentMonitor();
-    const monitorWidth: i32 = rl.getMonitorWidth(monitor);
-    const monitorHeight: i32 = rl.getMonitorHeight(monitor);
-    const otnosheniye: f32 = @as(f32, @floatFromInt(monitorWidth)) / @as(f32, @floatFromInt(monitorHeight));
-
-    // Set a fixed width and calculate height based on aspect ratio
-    const targetWidth: i32 = @intFromFloat(@as(f32, @floatFromInt(monitorHeight)) / otnosheniye);
-    const targetHeight: i32 = @intFromFloat(@as(f32, @floatFromInt(monitorWidth)) / 2);
-
-    std.debug.print("\ntest {}, {}, ratio: {}\n\n", .{ targetWidth, targetHeight, otnosheniye });
-    rl.closeWindow(); // Close window and OpenGL context
-}
 
 pub fn main() anyerror!void {
     // Initialization
     //--------------------------------------------------------------------------------------
 
-    //
-    var tetrisGame: Game = .{
-        .colorBoard = [_][Game.boardColumn]rl.Color{[_]rl.Color{rl.Color.blank} ** Game.boardColumn} ** Game.boardRows,
-        .currentPieceType = null,
-        .nextPieceType = null,
-        .currentPieceColor = rl.Color.blank,
-        .score = 0,
-        .level = 0,
-        .gameOver = false,
-        .gamePaused = false,
-        .fallSpeed = 1.0,
-    };
-    var fallTimer: f32 = 0.0;
-    //
+    const timestamp = std.time.microTimestamp();
+    const seed = @as(u64, @intCast(if (timestamp < 0) -timestamp else timestamp));
+    var tetrisGame = Game.init(seed);
+
     const screenWidth: i32 = 600;
     const screenHeight: i32 = 900;
 
@@ -279,26 +283,10 @@ pub fn main() anyerror!void {
     rl.setTargetFPS(60); // Set our game to run at 60 frames-per-second
     //--------------------------------------------------------------------------------------
 
-    // Initialize the next piece
-    tetrisGame.nextPieceType = tetrisGame.getRandomTetrominoeType();
-    tetrisGame.spawnTetrominoe();
-
     // Main game loop
     while (!rl.windowShouldClose()) {
         const frameTime = rl.getFrameTime();
-        fallTimer += frameTime;
-
-        if (!tetrisGame.gameOver) {
-            tetrisGame.spawnTetrominoe();
-
-            if (tetrisGame.currentPieceType != null) {
-                while (fallTimer >= tetrisGame.fallSpeed) {
-                    fallTimer -= tetrisGame.fallSpeed;
-                    _ = tetrisGame.movePieceDown();
-                    if (tetrisGame.currentPieceType == null) break;
-                }
-            }
-        }
+        tetrisGame.update(frameTime);
 
         // Draw
         //----------------------------------------------------------------------------------
