@@ -232,6 +232,105 @@ const Game = struct {
         }
     }
 
+    fn tryMove(self: *Self, dx: i32) void {
+        if (self.currentPieceType == null) return;
+
+        const nextX = self.currentPieceX + dx;
+        self.clearCurrentPiece();
+
+        if (self.canMoveTo(nextX, self.currentPieceY)) {
+            self.currentPieceX = nextX;
+        }
+
+        self.addTetrominoeOnBoard();
+    }
+
+    fn tryRotate(self: *Self, direction: i32) void {
+        if (self.currentPieceType == null) return;
+
+        const originalRotation = self.rotation;
+        const originalX = self.currentPieceX;
+        const originalY = self.currentPieceY;
+
+        self.clearCurrentPiece();
+
+        var rotated = @as(i32, self.rotation) + direction;
+        while (rotated < 0) rotated += 4;
+        rotated = @mod(rotated, 4);
+        self.rotation = @as(u8, @intCast(rotated));
+
+        const offsets = [_][2]i32{
+            .{ 0, 0 },
+            .{ -1, 0 },
+            .{ 1, 0 },
+            .{ 0, -1 },
+        };
+
+        var applied = false;
+        for (offsets) |offset| {
+            const testX = originalX + offset[0];
+            const testY = originalY + offset[1];
+
+            if (self.canMoveTo(testX, testY)) {
+                self.currentPieceX = testX;
+                self.currentPieceY = testY;
+                applied = true;
+                break;
+            }
+        }
+
+        if (!applied) {
+            self.rotation = originalRotation;
+            self.currentPieceX = originalX;
+            self.currentPieceY = originalY;
+        }
+
+        self.addTetrominoeOnBoard();
+    }
+
+    fn hardDrop(self: *Self) void {
+        if (self.currentPieceType == null) return;
+
+        while (self.movePieceDown()) {}
+        self.dropAccumulator = 0.0;
+    }
+
+    fn handleInput(self: *Self) void {
+        if (self.currentPieceType == null) return;
+
+        const leftPressed = rl.isKeyPressed(rl.KeyboardKey.left) or rl.isKeyPressed(rl.KeyboardKey.a);
+        const rightPressed = rl.isKeyPressed(rl.KeyboardKey.right) or rl.isKeyPressed(rl.KeyboardKey.d);
+        const rotateCWPressed = rl.isKeyPressed(rl.KeyboardKey.up) or rl.isKeyPressed(rl.KeyboardKey.w) or rl.isKeyPressed(rl.KeyboardKey.x);
+        const rotateCCWPressed = rl.isKeyPressed(rl.KeyboardKey.z) or rl.isKeyPressed(rl.KeyboardKey.q);
+        const hardDropPressed = rl.isKeyPressed(rl.KeyboardKey.space);
+        const softDropHeld = rl.isKeyDown(rl.KeyboardKey.down) or rl.isKeyDown(rl.KeyboardKey.s);
+
+        if (hardDropPressed) {
+            self.hardDrop();
+            return;
+        }
+
+        if (leftPressed and !rightPressed) {
+            self.tryMove(-1);
+        } else if (rightPressed and !leftPressed) {
+            self.tryMove(1);
+        }
+
+        if (rotateCWPressed) {
+            self.tryRotate(1);
+        }
+
+        if (rotateCCWPressed) {
+            self.tryRotate(-1);
+        }
+
+        if (softDropHeld) {
+            if (self.movePieceDown()) {
+                self.dropAccumulator = 0.0;
+            }
+        }
+    }
+
     pub fn movePieceDown(self: *Self) bool {
         if (self.currentPieceType == null) return false;
 
@@ -250,9 +349,17 @@ const Game = struct {
     }
 
     pub fn update(self: *Self, dt: f32) void {
+        if (rl.isKeyPressed(rl.KeyboardKey.p)) {
+            self.gamePaused = !self.gamePaused;
+        }
+
         if (self.gameOver or self.gamePaused) return;
 
         self.spawnTetrominoe();
+
+        if (self.currentPieceType == null) return;
+
+        self.handleInput();
 
         if (self.currentPieceType == null) return;
 
