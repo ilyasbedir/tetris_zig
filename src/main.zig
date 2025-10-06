@@ -30,11 +30,10 @@ const Game = struct {
     gamePaused: bool = false,
     fallSpeed: f32 = 1.0,
     rotation: u8 = 0, // TODO: refactor this to use enum instead plain value
+    currentPieceY: i32 = 0,
+    currentPieceX: i32 = 0,
 
-    // Empty color (black with alpha 0) indicates no piece
-    const EMPTY_COLOR = rl.Color{ .r = 0, .g = 0, .b = 0, .a = 0 };
-
-    pub fn drawBoardGrid(self: *Self) void {
+    fn drawBoardGrid(self: *Self) void {
         _ = self;
         //
         for (0..boardColumn + 1) |i| {
@@ -67,34 +66,34 @@ const Game = struct {
         }
     }
 
-    pub fn getRandomTetrominoeType(self: *Self) tetro.Tetrominoes.ShapeType {
+    fn getRandomTetrominoeType(self: *Self) tetro.Tetrominoes.ShapeType {
         _ = self;
         var prng = std.Random.DefaultPrng.init(@intCast(std.time.milliTimestamp()));
         var random = prng.random();
         return random.enumValue(tetro.Tetrominoes.ShapeType);
     }
 
-    pub fn getRandomTetrominoeColor(self: *Self) tetro.Tetrominoes.TetrominoeColor {
+    fn getRandomTetrominoeColor(self: *Self) tetro.Tetrominoes.TetrominoeColor {
         _ = self;
         var prng = std.Random.DefaultPrng.init(@intCast(std.time.microTimestamp()));
         return std.Random.enumValue(prng.random(), tetro.Tetrominoes.TetrominoeColor);
     }
 
-    pub fn getRandomRotation(self: *Self) u8 {
+    fn getRandomRotation(self: *Self) u8 {
         _ = self;
         var prng = std.Random.DefaultPrng.init(@intCast(std.time.milliTimestamp()));
         var random = prng.random();
         return random.uintLessThan(u8, 4); // Random number between 0 and 3 inclusive
     }
 
-    pub fn addTetrominoeOnBoard(self: *Self) void {
+    fn addTetrominoeOnBoard(self: *Self) void {
         //
         if (self.currentPieceType) |pieceType| {
             const tile = tetro.Tetrominoes.getShape(pieceType, self.rotation);
 
             // Define position
-            const startX: i32 = 0; // Center of board
-            const startY: i32 = 0; // Top of board
+            // const startX: i32 = 0; // Center of board
+            // const startY: i32 = 0; // Top of board
 
             // Generate a random color for this specific piece
             const pieceColor = tetro.Tetrominoes.TetrominoeColor.toColor(self.getRandomTetrominoeColor());
@@ -103,8 +102,8 @@ const Game = struct {
             for (0..4) |row| {
                 for (0..4) |column| {
                     if (0 < tile[row][column]) {
-                        const tileRow = @as(usize, @intCast(startY + @as(i32, @intCast(row))));
-                        const tileColumn = @as(usize, @intCast(startX + @as(i32, @intCast(column))));
+                        const tileRow = @as(usize, @intCast(self.currentPieceY + @as(i32, @intCast(row))));
+                        const tileColumn = @as(usize, @intCast(self.currentPieceX + @as(i32, @intCast(column))));
                         const bRows = @as(usize, @intFromFloat(boardRows));
                         const bColumns = @as(usize, @intFromFloat(boardColumn));
 
@@ -118,15 +117,7 @@ const Game = struct {
         }
     }
 
-    pub fn spawnTetrominoe(self: *Self) void {
-        self.currentPieceType = self.nextPieceType;
-        self.nextPieceType = self.getRandomTetrominoeType();
-        self.rotation = self.getRandomRotation();
-        self.addTetrominoeOnBoard();
-        self.drawTetrominoe();
-    }
-
-    pub fn drawTetrominoe(self: *Self) void {
+    fn drawTetrominoe(self: *Self) void {
         for (0..boardRows) |row| {
             for (0..boardColumn) |column| {
                 const pieceValue = self.colorBoard[row][column];
@@ -142,6 +133,102 @@ const Game = struct {
                     );
                 }
             }
+        }
+    }
+
+    pub fn spawnTetrominoe(self: *Self) void {
+        self.currentPieceType = self.nextPieceType;
+        self.addTetrominoeOnBoard();
+        _ = self.movePieceDown();
+        self.drawTetrominoe();
+        self.drawBoardGrid();
+    }
+
+    fn checkDownwardCollision(self: *Self) bool {
+        if (self.currentPieceType) |pieceType| {
+            const tile = tetro.Tetrominoes.getShape(pieceType, self.rotation);
+            const bRows = @as(usize, @intFromFloat(boardRows));
+            const bColumns = @as(usize, @intFromFloat(boardColumn));
+
+            // For each column in the 4x4 piece
+            for (0..4) |column| {
+                // Find the lowest filled cell in this column
+                var lowestFilledRow: ?usize = null;
+                for (0..4) |row| {
+                    if (0 < tile[row][column]) {
+                        lowestFilledRow = row;
+                    }
+                }
+
+                // If there's a filled cell in this column
+                if (lowestFilledRow) |rowIndex| {
+                    // Calculate board position
+                    const boardRow = @as(usize, @intCast(self.currentPieceY + @as(i32, @intCast(rowIndex))));
+                    const boardCol = @as(usize, @intCast(self.currentPieceX + @as(i32, @intCast(column))));
+
+                    // Check if next row is beyond board
+                    if (boardRow + 1 >= bRows) {
+                        return false;
+                    }
+
+                    // Check if there's a piece below (must be a different piece)
+                    if (boardCol < bColumns and
+                        self.colorBoard[boardRow + 1][boardCol].a > 0)
+                    {
+                        return false;
+                    }
+                }
+            }
+
+            return true; // No collision detected
+        }
+
+        return false; // No current piece
+    }
+
+    fn clearCurrentPiece(self: *Self) void {
+        if (self.currentPieceType) |pieceType| {
+            const tile = tetro.Tetrominoes.getShape(pieceType, self.rotation);
+
+            for (0..4) |row| {
+                for (0..4) |column| {
+                    if (0 < tile[row][column]) {
+                        const tileRow = @as(usize, @intCast(self.currentPieceY + @as(i32, @intCast(row))));
+                        const tileColumn = @as(usize, @intCast(self.currentPieceX + @as(i32, @intCast(column))));
+                        const bRows = @as(usize, @intFromFloat(boardRows));
+                        const bColumns = @as(usize, @intFromFloat(boardColumn));
+
+                        if ((tileRow < bRows) and (tileColumn < bColumns)) {
+                            // Clear this cell by setting it to empty color
+                            self.colorBoard[tileRow][tileColumn] = rl.Color.blank;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn movePieceDown(self: *Self) bool {
+        // Check if we can move down
+        const canMove = self.checkDownwardCollision();
+
+        if (canMove) {
+            // Clear current piece location
+            self.clearCurrentPiece();
+
+            // Update position (move down)
+            self.currentPieceY += 1;
+
+            // Place piece at new position
+            self.addTetrominoeOnBoard();
+
+            return true;
+        } else {
+            self.nextPieceType = self.getRandomTetrominoeType();
+            self.rotation = self.getRandomRotation();
+            // Piece can't move down further - it's fixed now
+            // Here you would typically check for completed lines
+            return false;
         }
     }
 };
@@ -169,7 +256,7 @@ pub fn main() anyerror!void {
 
     //
     var tetrisGame: Game = .{
-        .colorBoard = [_][Game.boardColumn]rl.Color{[_]rl.Color{Game.EMPTY_COLOR} ** Game.boardColumn} ** Game.boardRows,
+        .colorBoard = [_][Game.boardColumn]rl.Color{[_]rl.Color{rl.Color.blank} ** Game.boardColumn} ** Game.boardRows,
         .currentPieceType = null,
         .nextPieceType = null,
         .score = 0,
@@ -182,7 +269,7 @@ pub fn main() anyerror!void {
     const screenWidth: i32 = 600;
     const screenHeight: i32 = 900;
 
-    rl.initWindow(screenWidth, screenHeight, "Tetris ZIG develop");
+    rl.initWindow(screenWidth, screenHeight, "Tetris by @ilyasbedir");
     defer rl.closeWindow(); // Close window and OpenGL context
 
     rl.setTargetFPS(60); // Set our game to run at 60 frames-per-second
@@ -190,6 +277,7 @@ pub fn main() anyerror!void {
 
     // Initialize the next piece
     tetrisGame.nextPieceType = tetrisGame.getRandomTetrominoeType();
+    tetrisGame.rotation = tetrisGame.getRandomRotation();
 
     // Main game loop
     while (!rl.windowShouldClose()) {
@@ -203,10 +291,8 @@ pub fn main() anyerror!void {
 
         // spawn tetrominoe
         tetrisGame.spawnTetrominoe();
-        // draw grid for the debug
-        tetrisGame.drawBoardGrid();
         //
-        std.time.sleep(1 * std.time.ns_per_s);
+        std.Thread.sleep(1 * std.time.ns_per_s);
         //----------------------------------------------------------------------------------
     }
 }
