@@ -26,6 +26,8 @@ const Game = struct {
     currentPieceColor: rl.Color = rl.Color.blank,
     score: u32 = 0,
     level: u8 = 0,
+    linesClearedTotal: u32 = 0,
+    linesSinceLevelIncrease: u32 = 0,
     gameOver: bool = false,
     gamePaused: bool = false,
     fallSpeed: f32 = 1.0,
@@ -44,6 +46,8 @@ const Game = struct {
             .currentPieceColor = rl.Color.blank,
             .score = 0,
             .level = 0,
+            .linesClearedTotal = 0,
+            .linesSinceLevelIncrease = 0,
             .gameOver = false,
             .gamePaused = false,
             .fallSpeed = 1.0,
@@ -295,6 +299,71 @@ const Game = struct {
         self.dropAccumulator = 0.0;
     }
 
+    fn clearCompletedLines(self: *Self) u32 {
+        var cleared: u32 = 0;
+        if (boardRows == 0) return cleared;
+
+        var row: i32 = @as(i32, @intCast(boardRows)) - 1;
+        while (row >= 0) {
+            var isFull = true;
+            const rowIndex: usize = @as(usize, @intCast(row));
+            for (0..boardColumn) |column| {
+                if (self.colorBoard[rowIndex][column].a == 0) {
+                    isFull = false;
+                    break;
+                }
+            }
+
+            if (isFull) {
+                var y = row;
+                while (y > 0) : (y -= 1) {
+                    self.colorBoard[@as(usize, @intCast(y))] =
+                        self.colorBoard[@as(usize, @intCast(y - 1))];
+                }
+                self.colorBoard[0] = [_]rl.Color{rl.Color.blank} ** boardColumn;
+                cleared += 1;
+                continue;
+            }
+
+            row -= 1;
+        }
+
+        return cleared;
+    }
+
+    fn scoreForLines(self: *Self, lines: u32) u32 {
+        const base: u32 = switch (lines) {
+            0 => 0,
+            1 => 100,
+            2 => 300,
+            3 => 500,
+            else => 800,
+        };
+        return base * (@as(u32, self.level) + 1);
+    }
+
+    fn adjustFallSpeed(self: *Self) void {
+        const min_speed: f32 = 0.05;
+        const computed = 1.0 - (@as(f32, @floatFromInt(self.level)) * 0.1);
+        self.fallSpeed = if (computed < min_speed) min_speed else computed;
+    }
+
+    fn applyLineClear(self: *Self, cleared: u32) void {
+        if (cleared == 0) return;
+
+        self.score += self.scoreForLines(cleared);
+        self.linesClearedTotal += cleared;
+        self.linesSinceLevelIncrease += cleared;
+
+        while (self.linesSinceLevelIncrease >= 10) {
+            self.linesSinceLevelIncrease -= 10;
+            if (self.level < std.math.maxInt(u8)) {
+                self.level += 1;
+                self.adjustFallSpeed();
+            }
+        }
+    }
+
     fn handleInput(self: *Self) void {
         if (self.currentPieceType == null) return;
 
@@ -344,6 +413,8 @@ const Game = struct {
         } else {
             self.addTetrominoeOnBoard();
             self.lockCurrentPiece();
+            const cleared = self.clearCompletedLines();
+            self.applyLineClear(cleared);
             return false;
         }
     }
