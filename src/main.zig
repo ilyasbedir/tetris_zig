@@ -2,20 +2,58 @@ const std = @import("std");
 const rl = @import("raylib");
 const tetro = @import("tetrominoes.zig");
 
-const BackgroundColor = rl.Color{ .r = 245, .g = 245, .b = 245, .a = 255 };
-const BoardFillColor = rl.Color{ .r = 36, .g = 39, .b = 47, .a = 255 };
-const BoardOutlineColor = rl.Color{ .r = 12, .g = 15, .b = 24, .a = 220 };
-const GridLineColor = rl.Color{ .r = 95, .g = 100, .b = 112, .a = 120 };
-const TileShadowColor = rl.Color{ .r = 0, .g = 0, .b = 0, .a = 70 };
-const TileHighlightColor = rl.Color{ .r = 255, .g = 255, .b = 255, .a = 80 };
-const PanelFillColor = rl.Color{ .r = 232, .g = 235, .b = 241, .a = 255 };
-const PanelOutlineColor = rl.Color{ .r = 198, .g = 202, .b = 214, .a = 255 };
-const TextColor = rl.Color{ .r = 52, .g = 58, .b = 71, .a = 255 };
-const OverlayShade = rl.Color{ .r = 18, .g = 20, .b = 30, .a = 160 };
-const OverlayTextColor = rl.Color{ .r = 255, .g = 255, .b = 255, .a = 255 };
+const ScreenWidth: i32 = 920;
+const ScreenHeight: i32 = 880;
+
+const BackgroundColor = rl.Color{ .r = 12, .g = 18, .b = 34, .a = 255 };
+const BackdropGlowA = rl.Color{ .r = 96, .g = 58, .b = 128, .a = 180 };
+const BackdropGlowB = rl.Color{ .r = 24, .g = 129, .b = 162, .a = 180 };
+const BoardShadowColor = rl.Color{ .r = 20, .g = 30, .b = 52, .a = 180 };
+const BoardFillColor = rl.Color{ .r = 26, .g = 35, .b = 59, .a = 230 };
+const BoardOutlineColor = rl.Color{ .r = 117, .g = 203, .b = 255, .a = 200 };
+const GridLineColor = rl.Color{ .r = 89, .g = 120, .b = 150, .a = 90 };
+const TileShadowColor = rl.Color{ .r = 0, .g = 5, .b = 20, .a = 120 };
+const TileOutlineColor = rl.Color{ .r = 210, .g = 240, .b = 255, .a = 180 };
+const PanelFillColor = rl.Color{ .r = 28, .g = 41, .b = 68, .a = 240 };
+const PanelOutlineColor = rl.Color{ .r = 117, .g = 203, .b = 255, .a = 140 };
+const PanelGlowColor = rl.Color{ .r = 40, .g = 120, .b = 160, .a = 120 };
+const TextColor = rl.Color{ .r = 225, .g = 236, .b = 255, .a = 255 };
+const AccentLineColor = rl.Color{ .r = 120, .g = 198, .b = 255, .a = 140 };
+const OverlayShade = rl.Color{ .r = 6, .g = 12, .b = 22, .a = 210 };
+const OverlayTextColor = rl.Color{ .r = 233, .g = 244, .b = 255, .a = 255 };
 
 const Game = struct {
     const Self = @This();
+
+    fn clampComponent(value: i32) u8 {
+        const clamped = std.math.clamp(value, @as(i32, 0), @as(i32, 255));
+        return @as(u8, @intCast(clamped));
+    }
+
+    fn adjustColor(color: rl.Color, delta: i32) rl.Color {
+        return rl.Color{
+            .r = clampComponent(@as(i32, @intCast(color.r)) + delta),
+            .g = clampComponent(@as(i32, @intCast(color.g)) + delta),
+            .b = clampComponent(@as(i32, @intCast(color.b)) + delta),
+            .a = color.a,
+        };
+    }
+
+    fn withAlpha(color: rl.Color, alpha: u8) rl.Color {
+        return rl.Color{ .r = color.r, .g = color.g, .b = color.b, .a = alpha };
+    }
+
+    fn drawGlow(center: rl.Vector2, radius: f32, color: rl.Color) void {
+        const steps: usize = 6;
+        var i: usize = 0;
+        while (i < steps) : (i += 1) {
+            const t = @as(f32, @floatFromInt(i)) / @as(f32, @floatFromInt(steps));
+            const current_radius = radius * (1.0 - t * 0.2);
+            const base_alpha = @as(f32, @floatFromInt(color.a));
+            const alpha_value = std.math.clamp(base_alpha * (1.0 - t), @as(f32, 0.0), @as(f32, 255.0));
+            rl.drawCircleV(center, current_radius, withAlpha(color, @as(u8, @intFromFloat(alpha_value))));
+        }
+    }
 
     const boardStartCoordinateX: f32 = 80.0;
     const boardStartCoordinateY: f32 = 40.0;
@@ -572,6 +610,38 @@ const Game = struct {
         }
     }
 
+    fn drawBackdrop(self: *const Self) void {
+        _ = self;
+        const board_center_x = boardStartCoordinateX + boardWidth / 2.0;
+        const top_center = rl.Vector2{
+            .x = board_center_x - 120.0,
+            .y = boardStartCoordinateY - 140.0,
+        };
+        const bottom_center = rl.Vector2{
+            .x = board_center_x + 110.0,
+            .y = boardStartCoordinateY + boardHeight + 160.0,
+        };
+
+        drawGlow(top_center, 360.0, BackdropGlowA);
+        drawGlow(bottom_center, 300.0, BackdropGlowB);
+
+        const side_glow = rl.Rectangle{
+            .x = boardStartCoordinateX + boardWidth + 20.0,
+            .y = boardStartCoordinateY - 30.0,
+            .width = 220.0,
+            .height = 560.0,
+        };
+        rl.drawRectangleRounded(side_glow, 0.18, 8, withAlpha(PanelGlowColor, 80));
+
+        rl.drawRectangle(
+            @as(c_int, @intFromFloat(boardStartCoordinateX - 36.0)),
+            @as(c_int, @intFromFloat(boardStartCoordinateY + boardHeight + 18.0)),
+            @as(c_int, @intFromFloat(boardWidth + 180.0)),
+            2,
+            AccentLineColor,
+        );
+    }
+
     fn drawBoard(self: *const Self) void {
         const boardRect = rl.Rectangle{
             .x = boardStartCoordinateX,
@@ -580,8 +650,24 @@ const Game = struct {
             .height = boardHeight,
         };
 
+        const shadowRect = rl.Rectangle{
+            .x = boardRect.x - 12.0,
+            .y = boardRect.y - 12.0,
+            .width = boardRect.width + 24.0,
+            .height = boardRect.height + 24.0,
+        };
+        rl.drawRectangleRounded(shadowRect, 0.08, 6, withAlpha(BoardShadowColor, 160));
+
         rl.drawRectangleRounded(boardRect, 0.05, 6, BoardFillColor);
         rl.drawRectangleRoundedLines(boardRect, 0.05, 6, BoardOutlineColor);
+
+        const innerRect = rl.Rectangle{
+            .x = boardRect.x + 8.0,
+            .y = boardRect.y + 8.0,
+            .width = boardRect.width - 16.0,
+            .height = boardRect.height - 16.0,
+        };
+        rl.drawRectangleRoundedLines(innerRect, 0.03, 5, withAlpha(BoardOutlineColor, 120));
 
         self.drawGrid();
         self.drawLockedTiles();
@@ -615,6 +701,37 @@ const Game = struct {
         }
     }
 
+    fn drawStyledCell(rect: rl.Rectangle, color: rl.Color) void {
+        const shadowRect = rl.Rectangle{
+            .x = rect.x + 3.0,
+            .y = rect.y + 3.0,
+            .width = rect.width,
+            .height = rect.height,
+        };
+        rl.drawRectangleRounded(shadowRect, 0.45, 8, withAlpha(TileShadowColor, 200));
+
+        const baseColor = adjustColor(color, -35);
+        rl.drawRectangleRounded(rect, 0.4, 8, baseColor);
+
+        const innerRect = rl.Rectangle{
+            .x = rect.x + 2.5,
+            .y = rect.y + 2.5,
+            .width = rect.width - 5.0,
+            .height = rect.height - 5.0,
+        };
+        rl.drawRectangleRounded(innerRect, 0.45, 8, adjustColor(color, 10));
+
+        const glintRect = rl.Rectangle{
+            .x = rect.x + 4.0,
+            .y = rect.y + 4.0,
+            .width = rect.width - 8.0,
+            .height = (rect.height - 8.0) * 0.45,
+        };
+        rl.drawRectangleRounded(glintRect, 0.5, 8, withAlpha(adjustColor(color, 40), 150));
+
+        rl.drawRectangleRoundedLines(rect, 0.4, 8, TileOutlineColor);
+    }
+
     fn drawTile(self: *const Self, row: i32, column: i32, color: rl.Color) void {
         _ = self;
         const padding: f32 = 4.0;
@@ -626,15 +743,7 @@ const Game = struct {
             .width = tileWidth - (padding * 2.0),
             .height = tileHeight - (padding * 2.0),
         };
-        const shadow = rl.Rectangle{
-            .x = rect.x + 2.0,
-            .y = rect.y + 2.0,
-            .width = rect.width,
-            .height = rect.height,
-        };
-        rl.drawRectangleRounded(shadow, 0.25, 6, TileShadowColor);
-        rl.drawRectangleRounded(rect, 0.25, 6, color);
-        rl.drawRectangleRoundedLines(rect, 0.25, 6, TileHighlightColor);
+        drawStyledCell(rect, color);
     }
 
     fn drawLockedTiles(self: *const Self) void {
@@ -747,11 +856,10 @@ const Game = struct {
                 const rect = rl.Rectangle{
                     .x = x,
                     .y = y,
-                    .width = cellSize - 2.0,
-                    .height = cellSize - 2.0,
+                    .width = cellSize - 1.5,
+                    .height = cellSize - 1.5,
                 };
-                rl.drawRectangleRounded(rect, 0.25, 4, color);
-                rl.drawRectangleRoundedLines(rect, 0.25, 4, TileHighlightColor);
+                drawStyledCell(rect, color);
             }
         }
     }
@@ -844,10 +952,7 @@ pub fn main() anyerror!void {
     const seed = @as(u64, @intCast(if (timestamp < 0) -timestamp else timestamp));
     var tetrisGame = Game.init(seed);
 
-    const screenWidth: i32 = 920;
-    const screenHeight: i32 = 880;
-
-    rl.initWindow(screenWidth, screenHeight, "Tetris by @ilyasbedir");
+    rl.initWindow(ScreenWidth, ScreenHeight, "Tetris by @ilyasbedir");
     defer rl.closeWindow();
 
     rl.setTargetFPS(60);
@@ -861,6 +966,7 @@ pub fn main() anyerror!void {
 
         rl.clearBackground(BackgroundColor);
 
+        tetrisGame.drawBackdrop();
         tetrisGame.drawBoard();
         tetrisGame.drawHud();
     }

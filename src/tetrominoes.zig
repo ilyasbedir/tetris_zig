@@ -14,13 +14,13 @@ pub const Tetrominoes = struct {
 
     pub fn colorForShape(shape: ShapeType) rl.Color {
         return switch (shape) {
-            .I => rl.Color.sky_blue,
-            .O => rl.Color.yellow,
-            .T => rl.Color.purple,
-            .L => rl.Color.orange,
-            .J => rl.Color.blue,
-            .S => rl.Color.green,
-            .Z => rl.Color.red,
+            .I => rl.Color{ .r = 107, .g = 232, .b = 255, .a = 255 },
+            .O => rl.Color{ .r = 255, .g = 198, .b = 107, .a = 255 },
+            .T => rl.Color{ .r = 197, .g = 153, .b = 255, .a = 255 },
+            .L => rl.Color{ .r = 255, .g = 142, .b = 110, .a = 255 },
+            .J => rl.Color{ .r = 115, .g = 149, .b = 255, .a = 255 },
+            .S => rl.Color{ .r = 113, .g = 247, .b = 200, .a = 255 },
+            .Z => rl.Color{ .r = 255, .g = 109, .b = 179, .a = 255 },
         };
     }
 
