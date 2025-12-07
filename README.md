@@ -28,10 +28,6 @@ zig build -Drelease-safe run  # optimized run
 - Space: hard drop
 - P: pause
 - R: restart after game over
-
-## Formatting
-```bash
-zig fmt src
 ```
 
 ## Releases
