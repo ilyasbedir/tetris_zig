@@ -1,6 +1,13 @@
 # Tetris (Zig + Raylib)
 
-A small Tetris clone written in Zig with raylib for rendering. It uses a 7-bag generator, SRS-style kicks, a preview queue, score/level tracking, and a glowy UI theme.
+A small Tetris clone written in Zig with raylib for rendering.
+
+![Gameplay screenshot](docs/screenshot.png)
+
+## Features
+- Modern Tetris feel: 7-bag generator with SRS-style kicks and hard/soft drop
+- Preview queue + scoring/level progression
+- Raylib-based rendering with a neon-inspired palette
 
 ## Requirements
 - Zig 0.15.2 or newer (per `build.zig.zon`)
@@ -8,9 +15,9 @@ A small Tetris clone written in Zig with raylib for rendering. It uses a 7-bag g
 
 ## Build & Run
 ```bash
-zig build --fetch      # grab raylib-zig dependency the first time
-zig build run          # debug build
-zig build -Drelease-safe run   # optimized run
+zig build --fetch             # grab raylib-zig dependency the first time
+zig build run                 # debug build
+zig build -Drelease-safe run  # optimized run
 ```
 
 ## Controls
@@ -26,6 +33,10 @@ zig build -Drelease-safe run   # optimized run
 ```bash
 zig fmt src
 ```
+
+## Releases
+- Build optimized: `zig build -Drelease-safe run`
+- Tag convention: `vMAJOR.MINOR.PATCH` (see `CHANGELOG.md` for history)
 
 ## License
 MIT. See `LICENSE`.
