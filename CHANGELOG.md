@@ -2,10 +2,6 @@
 
 All notable changes to this project will be documented in this file. Follows [SemVer](https://semver.org/).
 
-## Unreleased
-- Add GIF/screenshot gallery (optional)
-- Minor polish and tweaks
-
 ## v1.0.0
 - Initial Zig + raylib implementation of Tetris
 - 7-bag generator with SRS-style kicks
